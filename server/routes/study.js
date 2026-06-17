@@ -1,12 +1,32 @@
 const router    = require('express').Router()
 const multer    = require('multer')
-const pdfParse  = require('pdf-parse')
 const pool      = require('../db')
 const authGuard = require('../middleware/authGuard')
 const { premiumOnly, getPlanLimits } = require('../middleware/roleCheck')
 const grok      = require('../services/grok')
+const { extractText } = require('../services/fileParser')
 
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } })
+const ALLOWED_TYPES = [
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'text/plain',
+]
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = [...ALLOWED_TYPES, 'application/octet-stream']
+    // Also allow by extension for cases where mimetype is wrong
+    const ext = file.originalname.split('.').pop().toLowerCase()
+    if (ALLOWED_TYPES.includes(file.mimetype) || ['pdf','docx','pptx','txt'].includes(ext)) {
+      cb(null, true)
+    } else {
+      cb(new Error('Unsupported file type. Please upload PDF, DOCX, PPTX, or TXT.'))
+    }
+  }
+})
 
 router.use(authGuard)
 
@@ -79,23 +99,36 @@ router.post('/session', async (req, res) => {
   }
 })
 
-// ── POST /api/study/upload-pdf ───────────────────────
-router.post('/upload-pdf', premiumOnly, upload.single('pdf'), async (req, res) => {
+// ── POST /api/study/upload-file ──────────────────────
+// Supports PDF, DOCX, PPTX, TXT
+router.post('/upload-file', premiumOnly, upload.single('file'), async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ error: 'No PDF file uploaded' })
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
 
-    const data = await pdfParse(req.file.buffer)
-    const text = data.text.trim()
+    const result = await extractText(req.file.buffer, req.file.originalname)
 
-    if (!text || text.length < 50) {
-      return res.status(400).json({ error: 'Could not extract text from this PDF. Try pasting the text directly.' })
-    }
-
-    res.json({ text: text.slice(0, 12000), pages: data.numpages, filename: req.file.originalname })
+    res.json({
+      text:     result.text,
+      pages:    result.pages,
+      type:     result.type,
+      filename: req.file.originalname,
+      chars:    result.text.length,
+    })
 
   } catch (err) {
-    console.error('PDF parse error:', err)
-    res.status(500).json({ error: 'Failed to read PDF. Try pasting the text instead.' })
+    console.error('File parse error:', err)
+    res.status(400).json({ error: err.message || 'Failed to read file. Try pasting the text instead.' })
+  }
+})
+
+// Keep old route as alias for backwards compatibility
+router.post('/upload-pdf', premiumOnly, upload.single('pdf'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
+    const result = await extractText(req.file.buffer, req.file.originalname)
+    res.json({ text: result.text, pages: result.pages, filename: req.file.originalname })
+  } catch (err) {
+    res.status(400).json({ error: err.message || 'Failed to read file.' })
   }
 })
 
