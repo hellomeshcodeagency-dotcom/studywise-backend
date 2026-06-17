@@ -17,6 +17,8 @@
     "multer": "^1.4.5-lts.1",
     "pg": "^8.11.3",
     "pdf-parse": "^1.1.1",
+    "mammoth": "^1.7.2",
+    "officeparser": "^4.1.2",
     "uuid": "^9.0.1",
     "axios": "^1.6.7"
   },
