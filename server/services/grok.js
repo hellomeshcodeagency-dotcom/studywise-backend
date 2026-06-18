@@ -1,9 +1,9 @@
 const axios = require('axios')
 
-const XAI_BASE = 'https://api.x.ai/v1'
-const MODEL    = process.env.XAI_MODEL || 'grok-3'
+const GROQ_BASE = 'https://api.groq.com/openai/v1'
+const MODEL     = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile'
 
-async function callGrok(messages, systemPrompt = '', maxTokens = 1500) {
+async function callGroq(messages, systemPrompt = '', maxTokens = 1500) {
   const body = {
     model: MODEL,
     max_tokens: maxTokens,
@@ -12,9 +12,9 @@ async function callGrok(messages, systemPrompt = '', maxTokens = 1500) {
       : messages,
   }
 
-  const res = await axios.post(`${XAI_BASE}/chat/completions`, body, {
+  const res = await axios.post(`${GROQ_BASE}/chat/completions`, body, {
     headers: {
-      Authorization: `Bearer ${process.env.XAI_API_KEY}`,
+      Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
       'Content-Type': 'application/json',
     },
     timeout: 60000,
@@ -32,7 +32,7 @@ async function explainContent(content, level) {
   }
   const system = `You are an expert tutor. Explain content clearly and engagingly. Write in plain paragraphs — no markdown symbols, no bullet points, no headers.`
   const prompt = `Explain the following study material at a ${level} level (${levelMap[level]}):\n\n${content.slice(0, 8000)}`
-  return callGrok([{ role: 'user', content: prompt }], system, 1200)
+  return callGroq([{ role: 'user', content: prompt }], system, 1200)
 }
 
 // ── SUMMARY ─────────────────────────────────────────
@@ -41,7 +41,7 @@ async function summariseContent(content, level) {
 Schema: {"topic":"string","overview":"string","key_points":["string"],"sections":[{"title":"string","content":"string"}],"key_terms":[{"term":"string","definition":"string"}]}
 key_points: 5-7 items. sections: 2-4 items. key_terms: 6-10 items.`
   const prompt = `Create structured study notes for level: ${level}\n\n${content.slice(0, 8000)}`
-  const raw = await callGrok([{ role: 'user', content: prompt }], system, 1500)
+  const raw = await callGroq([{ role: 'user', content: prompt }], system, 1500)
   return JSON.parse(raw.replace(/```json|```/g, '').trim())
 }
 
@@ -51,7 +51,7 @@ async function generateQuiz(content, level, count = 10) {
 Schema: {"questions":[{"q":"question text","options":["A. text","B. text","C. text","D. text"],"answer":"A","explanation":"why this is correct"}]}
 Generate exactly ${count} questions at ${level} level. Mix difficulty. Answer field is just the letter.`
   const prompt = `Generate ${count} multiple-choice quiz questions from:\n\n${content.slice(0, 8000)}`
-  const raw = await callGrok([{ role: 'user', content: prompt }], system, 1500)
+  const raw = await callGroq([{ role: 'user', content: prompt }], system, 1500)
   const data = JSON.parse(raw.replace(/```json|```/g, '').trim())
   return data.questions
 }
@@ -62,7 +62,7 @@ async function generateFlashcards(content, count = 12) {
 Schema: {"cards":[{"front":"term or question (concise)","back":"definition or answer (1-3 sentences)"}]}
 Generate exactly ${count} cards covering key concepts, definitions, and important facts.`
   const prompt = `Create ${count} flashcards from:\n\n${content.slice(0, 8000)}`
-  const raw = await callGrok([{ role: 'user', content: prompt }], system, 1200)
+  const raw = await callGroq([{ role: 'user', content: prompt }], system, 1200)
   const data = JSON.parse(raw.replace(/```json|```/g, '').trim())
   return data.cards
 }
@@ -73,7 +73,7 @@ async function generateMindmap(content) {
 Schema: {"center":"Main Topic (max 4 words)","branches":[{"label":"Branch name (2-4 words)","children":["sub-concept","sub-concept"]}]}
 Max 6 branches, max 3 children each. Keep labels short (2-5 words).`
   const prompt = `Extract key concepts for a mind map from:\n\n${content.slice(0, 6000)}`
-  const raw = await callGrok([{ role: 'user', content: prompt }], system, 800)
+  const raw = await callGroq([{ role: 'user', content: prompt }], system, 800)
   return JSON.parse(raw.replace(/```json|```/g, '').trim())
 }
 
@@ -83,7 +83,7 @@ async function generatePractice(content, level) {
 Schema: {"problems":[{"question":"string","hint":"string","solution":"string","difficulty":"easy|medium|hard"}]}
 Generate 5 problems at ${level} level — mix of difficulties.`
   const prompt = `Create 5 practice problems from:\n\n${content.slice(0, 6000)}`
-  const raw = await callGrok([{ role: 'user', content: prompt }], system, 1200)
+  const raw = await callGroq([{ role: 'user', content: prompt }], system, 1200)
   const data = JSON.parse(raw.replace(/```json|```/g, '').trim())
   return data.problems
 }
@@ -98,11 +98,11 @@ Study material context:\n${content.slice(0, 4000)}`
     { role: 'user', content: newMessage },
   ]
 
-  return callGrok(messages, system, 800)
+  return callGroq(messages, system, 800)
 }
 
 module.exports = {
-  callGrok,
+  callGroq,
   explainContent,
   summariseContent,
   generateQuiz,
