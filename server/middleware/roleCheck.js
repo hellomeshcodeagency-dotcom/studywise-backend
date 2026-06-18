@@ -25,7 +25,7 @@ function premiumOnly(req, res, next) {
     return res.status(403).json({
       error: 'Premium feature',
       code: 'UPGRADE_REQUIRED',
-      message: 'Upgrade to premium for ₦500/month to access this feature.',
+      message: 'Upgrade to premium for ₦700/month to access this feature.',
     })
   }
   next()
