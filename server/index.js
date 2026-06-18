@@ -43,6 +43,7 @@ app.use('/api/study/chat',       aiLimiter)
 
 // ── ROUTES ───────────────────────────────────────────
 app.use('/api/auth',  require('./routes/auth'))
+app.use('/api/study/plan', require('./routes/studyPlan'))
 app.use('/api/study', require('./routes/study'))
 app.use('/api/user',  require('./routes/user'))
 app.use('/api/admin', require('./routes/admin'))
