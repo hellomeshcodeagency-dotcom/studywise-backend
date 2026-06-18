@@ -82,15 +82,16 @@ async function initDB() {
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS study_plans (
-        id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        exam_name   VARCHAR(200) NOT NULL,
-        exam_date   DATE NOT NULL,
-        subjects    JSONB NOT NULL DEFAULT '[]',
-        weak_areas  TEXT,
-        schedule    JSONB NOT NULL DEFAULT '[]',
-        created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        exam_name     VARCHAR(200) NOT NULL,
+        exam_date     DATE NOT NULL,
+        subjects      JSONB NOT NULL DEFAULT '[]',
+        weak_areas    TEXT,
+        schedule      JSONB NOT NULL DEFAULT '[]',
+        document_name VARCHAR(300),
+        created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `)
 
