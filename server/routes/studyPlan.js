@@ -1,8 +1,20 @@
 const router    = require('express').Router()
+const multer    = require('multer')
 const pool      = require('../db')
 const authGuard = require('../middleware/authGuard')
 const { hasPremium } = require('../middleware/roleCheck')
 const { callGroq } = require('../services/grok')
+const { extractText } = require('../services/fileParser')
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const ext = file.originalname.split('.').pop().toLowerCase()
+    if (['pdf','docx','pptx','txt'].includes(ext)) cb(null, true)
+    else cb(new Error('Unsupported file type'))
+  }
+})
 
 router.use(authGuard)
 
@@ -19,7 +31,7 @@ function premiumCheck(req, res, next) {
 }
 
 // Generate schedule using Groq AI
-async function generateSchedule(examName, examDate, subjects, weakAreas) {
+async function generateSchedule(examName, examDate, subjects, weakAreas, documentText = '') {
   const today    = new Date()
   const examDay  = new Date(examDate)
   const daysLeft = Math.ceil((examDay - today) / (1000 * 60 * 60 * 24))
@@ -27,18 +39,28 @@ async function generateSchedule(examName, examDate, subjects, weakAreas) {
   if (daysLeft < 1) throw new Error('Exam date must be in the future')
 
   const system = `You are an expert study planner. Return ONLY valid JSON, no markdown fences.
-Schema: {"days":[{"date":"YYYY-MM-DD","topics":[{"title":"Topic title","description":"Brief 1 sentence description","duration_mins":30,"is_weak_area":false}]}]}
+Schema: {"days":[{"date":"YYYY-MM-DD","topics":[{"title":"Topic title","description":"Brief 1 sentence what to study","duration_mins":30,"is_weak_area":false}]}]}
 Rules:
-- Generate exactly ${Math.min(daysLeft, 60)} days of study schedule from ${today.toISOString().split('T')[0]} to ${new Date(examDay.getTime() - 86400000).toISOString().split('T')[0]}
-- Prioritise weak areas in the first half of the schedule and revisit them near the exam
+- Generate exactly ${Math.min(daysLeft, 60)} days from ${today.toISOString().split('T')[0]} to ${new Date(examDay.getTime() - 86400000).toISOString().split('T')[0]}
+- ${documentText ? 'Extract specific topics, chapters and concepts from the provided document content' : 'Generate topics based on the subjects provided'}
+- Prioritise weak areas in the first half and revisit near exam
 - Each day should have 2-4 topics
 - Duration per topic: 20-60 minutes
-- Mix subjects throughout the week, don't do the same subject all day
+- Mix subjects throughout the week
 - Mark weak area topics with is_weak_area: true
 - Last 2-3 days before exam: revision and past questions only
 - Keep topic titles concise (max 8 words)`
 
-  const prompt = `Create a study plan for: ${examName}
+  const prompt = documentText
+    ? `Create a study plan for: ${examName}
+Exam date: ${examDate}
+Subjects: ${subjects.join(', ')}
+Weak areas: ${weakAreas || 'None specified'}
+Days available: ${daysLeft}
+
+DOCUMENT CONTENT TO BASE TOPICS ON:
+${documentText.slice(0, 6000)}`
+    : `Create a study plan for: ${examName}
 Exam date: ${examDate}
 Subjects: ${subjects.join(', ')}
 Weak areas: ${weakAreas || 'None specified'}
@@ -64,21 +86,40 @@ router.get('/', premiumCheck, async (req, res) => {
 })
 
 // ── POST /api/plan/create ─────────────────────────────
-router.post('/create', premiumCheck, async (req, res) => {
+// Accepts multipart/form-data with optional file upload
+router.post('/create', premiumCheck, upload.single('document'), async (req, res) => {
   try {
-    const { exam_name, exam_date, subjects, weak_areas } = req.body
+    // Parse subjects from JSON string (sent as form field)
+    let { exam_name, exam_date, subjects, weak_areas } = req.body
+    if (typeof subjects === 'string') {
+      try { subjects = JSON.parse(subjects) } catch { subjects = [subjects] }
+    }
 
     if (!exam_name || !exam_date || !subjects?.length) {
       return res.status(400).json({ error: 'Exam name, date and subjects are required' })
     }
 
-    const schedule = await generateSchedule(exam_name, exam_date, subjects, weak_areas)
+    // Extract text from uploaded document if provided
+    let documentText = ''
+    let documentName = ''
+    if (req.file) {
+      try {
+        const extracted = await extractText(req.file.buffer, req.file.originalname)
+        documentText = extracted.text
+        documentName = req.file.originalname
+      } catch (err) {
+        console.warn('Could not extract document text:', err.message)
+        // Continue without document — don't fail the whole request
+      }
+    }
+
+    const schedule = await generateSchedule(exam_name, exam_date, subjects, weak_areas, documentText)
 
     const result = await pool.query(`
-      INSERT INTO study_plans (user_id, exam_name, exam_date, subjects, weak_areas, schedule)
-      VALUES ($1, $2, $3, $4, $5, $6)
+      INSERT INTO study_plans (user_id, exam_name, exam_date, subjects, weak_areas, schedule, document_name)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING *
-    `, [req.user.id, exam_name, exam_date, JSON.stringify(subjects), weak_areas || '', JSON.stringify(schedule)])
+    `, [req.user.id, exam_name, exam_date, JSON.stringify(subjects), weak_areas || '', JSON.stringify(schedule), documentName || null])
 
     res.status(201).json({ plan: result.rows[0] })
   } catch (err) {
