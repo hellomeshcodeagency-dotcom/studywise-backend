@@ -337,4 +337,39 @@ router.delete('/sessions/:id', async (req, res) => {
   }
 })
 
+
+// ── POST /api/study/voice ─────────────────────────────
+router.post('/voice', authGuard, async (req, res) => {
+  try {
+    const { question, history = [] } = req.body
+
+    // Check premium
+    const { hasPremium } = require('../middleware/roleCheck')
+    if (!hasPremium(req.user)) {
+      return res.status(403).json({
+        error: 'Premium feature',
+        code: 'UPGRADE_REQUIRED',
+        message: 'Voice Tutor requires Premium. Upgrade for ₦700/month.',
+      })
+    }
+
+    if (!question?.trim()) return res.status(400).json({ error: 'No question provided' })
+
+    const system = `You are a friendly and knowledgeable tutor. Answer student questions clearly and concisely. Keep answers under 100 words so they are easy to listen to. Use simple language. Do not use markdown, bullet points, or symbols — just plain conversational sentences.`
+
+    const messages = [
+      ...history.map(h => ({ role: h.role, content: h.content })),
+      { role: 'user', content: question },
+    ]
+
+    const answer = await grok.callGroq(messages, system, 200)
+    await logUsage(req.user.id, null, 'voice')
+
+    res.json({ answer })
+  } catch (err) {
+    console.error('Voice error:', err)
+    res.status(500).json({ error: 'AI error. Please try again.' })
+  }
+})
+
 module.exports = router
