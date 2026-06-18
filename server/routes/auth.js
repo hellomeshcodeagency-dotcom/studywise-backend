@@ -51,7 +51,7 @@ router.post('/register', async (req, res) => {
     const code = makeReferralCode()
 
     // If referred, give +3 extra days (6 total instead of 3)
-    const trialDays    = referral_code ? 6 : 3
+    const trialDays    = referral_code ? 10 : 7
     const trialEndsAt  = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000)
 
     // Find referrer
