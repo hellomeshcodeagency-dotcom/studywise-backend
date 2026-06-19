@@ -16,6 +16,15 @@ app.use(cors({
   credentials: true,
 }))
 
+// Raw body for Paystack webhook signature verification
+app.use('/api/payment/webhook', express.raw({ type: 'application/json' }))
+app.use((req, res, next) => {
+  if (req.path === '/api/payment/webhook') {
+    req.body = JSON.parse(req.body)
+  }
+  next()
+})
+
 app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true, limit: '10mb' }))
 
@@ -42,7 +51,8 @@ app.use('/api/study/practice',   aiLimiter)
 app.use('/api/study/chat',       aiLimiter)
 
 // ── ROUTES ───────────────────────────────────────────
-app.use('/api/auth',  require('./routes/auth'))
+app.use('/api/auth',    require('./routes/auth'))
+app.use('/api/payment', require('./routes/payment'))
 app.use('/api/study/plan', require('./routes/studyPlan'))
 app.use('/api/study', require('./routes/study'))
 app.use('/api/user',  require('./routes/user'))
