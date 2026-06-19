@@ -97,6 +97,22 @@ async function initDB() {
 
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_study_plans_user ON study_plans(user_id)`)
 
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS transactions (
+        id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        reference   VARCHAR(100) UNIQUE NOT NULL,
+        amount      INTEGER NOT NULL,
+        status      VARCHAR(20) NOT NULL DEFAULT 'pending',
+        paid_at     TIMESTAMPTZ,
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `)
+
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_transactions_user ON transactions(user_id)`)
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_transactions_ref ON transactions(reference)`)
+
     // Indexes
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id)`)
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_tool_usage_user ON tool_usage(user_id)`)
